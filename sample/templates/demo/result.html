@@ -1,0 +1,211 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <title>Weather Forecast</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    
+</head>
+<body>  
+    <button class="dark-mode-btn">🌙</button>
+<div class="overlay"></div>
+
+
+    <div class="container">
+        <div class="main-content">
+            <h1 class="text-center">Weather Forecast</h1>
+            <form method="POST">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="id_name">Enter a City:</label>
+                    <div class="input-group">
+                        {{ form.name }}
+                        <button type="submit" class="btn btn-primary">Get Weather</button>
+                    </div>
+                </div>
+                {% if form.errors %}
+                    <div class="alert alert-warning">
+                        <strong>There was an error with your input. Please check the form fields.</strong>
+                        <ul>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </form>
+            {% if result %}
+                <div class="weather-info">
+                    {% if result == "No data found for the provided city/state." %}
+                        <div class="alert alert-warning">
+                            {{ result }}
+                        </div>
+                    {% else %}
+                        <h3>Weather Information</h3>
+                        <div class="table-responsive">
+                            {{ result|safe }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+            {% if recommendation %}
+                <div class="recommendation">
+                    <h4>Recommendation:</h4>
+                    <p>{{ recommendation }}</p>
+                </div>
+            {% endif %}
+        </div>
+        {% if folium_map %}
+            <div class="map-container">
+                {{ folium_map|safe }}
+            </div>
+        {% endif %}
+        <div class="news-box">
+            <h3>Latest Weather News</h3>
+            {% if news_articles %}
+                <div class="list-group">
+                    {% for article in news_articles %}
+                        {% if "removed" not in article.title|lower %}
+                            <div class="list-group-item">
+                                <h5 class="mb-1">{{ article.title }}</h5>
+                                <p class="mb-1">{{ article.description }}</p>
+                                <a href="{{ article.url }}" target="_blank" class="btn btn-info">Read More</a>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">No weather news available at the moment.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Chatbot Button -->
+    <button class="chat-btn btn btn-primary" onclick="toggleChat()" aria-label="Open Chat">Chat with Us</button>
+
+    <!-- Chatbot Popup -->
+    <div class="chat-popup" id="chatPopup" role="dialog" aria-labelledby="chatHeader">
+        <div class="chat-header" id="chatHeader">
+            <span>Chatbot</span>
+            <button class="btn-close" onclick="toggleChat()" aria-label="Close Chat">×</button>
+        </div>
+        <div class="chat-content" id="chatContent"></div>
+        <div class="typing-indicator" id="typingIndicator">Bot is typing...</div>
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="Ask me anything..." aria-label="Chat Input" />
+            <button class="btn btn-primary" onclick="sendMessage()" aria-label="Send Message">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Toggle the chat popup
+function toggleChat() {
+    const chatPopup = document.getElementById('chatPopup');
+    chatPopup.style.display = chatPopup.style.display === 'flex' ? 'none' : 'flex';
+    if (chatPopup.style.display === 'flex') {
+        document.getElementById('chatInput').focus();
+    }
+}
+
+// Send message to the chatbot
+async function sendMessage() {
+    const chatInput = document.getElementById('chatInput');
+    const userMessage = chatInput.value.trim();
+
+    if (userMessage) {
+        appendMessage('user', userMessage);
+        chatInput.value = '';
+
+        // Show typing indicator
+        const typingIndicator = document.getElementById('typingIndicator');
+        typingIndicator.style.display = 'block';
+
+        const url = 'https://chatgpt-vision1.p.rapidapi.com/gpt4';
+        const options = {
+            method: 'POST',
+            headers: {
+                'x-rapidapi-key': 'caae8a9fafmsh6b86fdd6f63a901p11c47fjsn47e96f6f45c1',
+                'x-rapidapi-host': 'chatgpt-vision1.p.rapidapi.com',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'user',
+                        content: userMessage
+                    }
+                ],
+                web_access: false
+            })
+        };
+
+        try {
+            const response = await fetch(url, options);
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log("API Response:", result); // Log the full response
+
+            // Check if the response contains the 'result' field with the chatbot message
+            if (result && result.result) {
+                const botMessage = result.result; // Directly use the 'result' field for the bot message
+                appendMessage('bot', botMessage);
+            } else {
+                console.log("Response structure mismatch or missing 'result' field.");
+                appendMessage('bot', 'Sorry, I am unable to retrieve a valid message.');
+            }
+
+        } catch (error) {
+            console.error("Chatbot API Error:", error);
+            appendMessage('bot', 'Sorry, I am unable to process your request at the moment.');
+        } finally {
+            typingIndicator.style.display = 'none';
+        }
+    }
+}
+
+
+// Append message to chat window
+function appendMessage(sender, message) {
+    const chatContent = document.getElementById('chatContent');
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
+    messageDiv.textContent = message;
+    chatContent.appendChild(messageDiv);
+    chatContent.scrollTop = chatContent.scrollHeight;
+}
+
+// Close chat popup on Escape key
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        const chatPopup = document.getElementById('chatPopup');
+        if (chatPopup.style.display === 'flex') {
+            toggleChat();
+        }
+    }
+});
+const toggleButton = document.querySelector('.dark-mode-btn');
+const body = document.body;
+
+toggleButton.addEventListener('click', () => {
+    body.classList.toggle('dark-mode'); // Toggle dark mode class
+});
+
+
+
+    </script>
+    
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
