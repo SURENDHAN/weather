@@ -36,7 +36,7 @@ def login_view(request):
     return render(request, 'demo/login.html')
 
 def get_weather_news(place, country_code='IN'):
-    news_api_key = '568f66032bf6460e9dcdb60954ee4ade'
+    news_api_key = ''
     query = f'{place} AND {country_code} AND (rain OR storm OR cyclone OR flood)'
     
     url = f'https://newsapi.org/v2/everything?q={query}&apiKey={news_api_key}'
